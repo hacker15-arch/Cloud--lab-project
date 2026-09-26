@@ -53,17 +53,19 @@ def _display_object_name(object_name: str, user_id: Optional[str]) -> str:
 
 @router.get("/objects", response_model=ObjectListResponse)
 async def list_objects(user_id: Optional[str] = Query(None, alias="user_id")):
-    """List objects for a single user when ownership scoping is enabled."""
+    """List objects for the authenticated user only."""
     normalized_user_id = _normalize_user_id(user_id)
+    if not normalized_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required: user_id is missing.",
+        )
+
     objects = replication_manager.list_all_objects()
-
-    if normalized_user_id:
-        filtered = [obj for obj in objects if obj.object_name.startswith(f"{normalized_user_id}/")]
-        for obj in filtered:
-            obj.object_name = _display_object_name(obj.object_name, normalized_user_id)
-        return ObjectListResponse(count=len(filtered), objects=filtered)
-
-    return ObjectListResponse(count=len(objects), objects=objects)
+    filtered = [obj for obj in objects if obj.object_name.startswith(f"{normalized_user_id}/")]
+    for obj in filtered:
+        obj.object_name = _display_object_name(obj.object_name, normalized_user_id)
+    return ObjectListResponse(count=len(filtered), objects=filtered)
 
 
 @router.get("/admin/quorum/validate")
@@ -90,6 +92,12 @@ async def get_object_versions(
 ):
     """Retrieve full version history for a specific object under the current user namespace."""
     normalized_user_id = _normalize_user_id(user_id)
+    if not normalized_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required: user_id is missing.",
+        )
+
     scoped_name = _scoped_object_name(object_name, normalized_user_id)
     history = replication_manager.get_object_history(scoped_name)
     if not history:
@@ -98,8 +106,6 @@ async def get_object_versions(
             detail=f"Object '{object_name}' not found",
         )
     history.object_name = _display_object_name(history.object_name, normalized_user_id)
-    for version in history.versions:
-        version.object_name = _display_object_name(version.object_name, normalized_user_id) if hasattr(version, "object_name") else version
     return history
 
 
@@ -110,6 +116,12 @@ async def get_object_metadata(
 ):
     """Retrieve metadata, version, checksum, and replica locations for an object."""
     normalized_user_id = _normalize_user_id(user_id)
+    if not normalized_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required: user_id is missing.",
+        )
+
     scoped_name = _scoped_object_name(object_name, normalized_user_id)
     try:
         meta = replication_manager.get_object_metadata(scoped_name)
@@ -133,6 +145,12 @@ async def verify_object_integrity(
 ):
     """Perform on-demand SHA-256 integrity verification across all replicas of an object."""
     normalized_user_id = _normalize_user_id(user_id)
+    if not normalized_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required: user_id is missing.",
+        )
+
     scoped_name = _scoped_object_name(object_name, normalized_user_id)
     try:
         report = integrity_manager.verify_object_integrity(scoped_name, version=version)
@@ -151,6 +169,12 @@ async def head_object(
 ):
     """Fast check for object existence, size, version, and checksum headers."""
     normalized_user_id = _normalize_user_id(user_id)
+    if not normalized_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required: user_id is missing.",
+        )
+
     scoped_name = _scoped_object_name(object_name, normalized_user_id)
     try:
         meta = replication_manager.get_object_metadata(scoped_name)
@@ -187,6 +211,12 @@ async def download_object(
 ):
     """Download an object's contents (latest or specific version) via streaming response enforcing read quorum."""
     normalized_user_id = _normalize_user_id(user_id)
+    if not normalized_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required: user_id is missing.",
+        )
+
     scoped_name = _scoped_object_name(object_name, normalized_user_id)
     rq = read_quorum
     if rq is None and "x-vault-read-quorum" in request.headers:
@@ -244,6 +274,12 @@ async def upload_object(
 ):
     """Upload an object, create a new version, compute SHA-256, and replicate to nodes with write quorum."""
     normalized_user_id = _normalize_user_id(user_id)
+    if not normalized_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required: user_id is missing.",
+        )
+
     scoped_name = _scoped_object_name(object_name, normalized_user_id)
     rf = replication_factor
     if rf is None and "x-vault-replication-factor" in request.headers:
@@ -318,6 +354,12 @@ async def upload_object(
 async def delete_object(object_name: str, user_id: Optional[str] = Query(None, alias="user_id")):
     """Delete an object, its versions, and metadata across the cluster."""
     normalized_user_id = _normalize_user_id(user_id)
+    if not normalized_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required: user_id is missing.",
+        )
+
     scoped_name = _scoped_object_name(object_name, normalized_user_id)
     async with lock_manager.write_lock(scoped_name):
         try:
