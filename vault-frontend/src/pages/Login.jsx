@@ -11,11 +11,11 @@ export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     try {
-      const userObj = login(email, password);
+      const userObj = await login(email, password);
       if (userObj.role === 'admin') {
         navigate('/admin/dashboard');
       } else {

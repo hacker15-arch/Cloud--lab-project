@@ -11,26 +11,53 @@ const getCurrentUserId = () => {
   }
 };
 
+const getAuthHeaders = () => {
+  const stored = localStorage.getItem('vault_user');
+  if (!stored) return {};
+  try {
+    const user = JSON.parse(stored);
+    return user?.token ? { Authorization: `Bearer ${user.token}` } : {};
+  } catch {
+    return {};
+  }
+};
+
 const withUserScope = (params = {}) => {
   const userId = getCurrentUserId();
   if (!userId) return params;
   return { ...params, user_id: userId };
 };
 
-export const listObjects = () => apiClient.get('/objects', { params: withUserScope() });
-export const getObjectMetadata = (objectName) => apiClient.get(`/objects/${objectName}/metadata`, { params: withUserScope() });
-export const getObjectVersions = (objectName) => apiClient.get(`/objects/${objectName}/versions`, { params: withUserScope() });
+export const listObjects = () => apiClient.get('/objects', {
+  params: withUserScope(),
+  headers: getAuthHeaders(),
+});
+
+export const getObjectMetadata = (objectName) => apiClient.get(`/objects/${objectName}/metadata`, {
+  params: withUserScope(),
+  headers: getAuthHeaders(),
+});
+
+export const getObjectVersions = (objectName) => apiClient.get(`/objects/${objectName}/versions`, {
+  params: withUserScope(),
+  headers: getAuthHeaders(),
+});
+
 export const verifyObjectIntegrity = (objectName, version) => {
   const params = withUserScope(version ? { version } : {});
   const url = `/objects/${objectName}/verify`;
-  return apiClient.get(url, { params });
+  return apiClient.get(url, { params, headers: getAuthHeaders() });
 };
 
-export const deleteObject = (objectName) => apiClient.delete(`/objects/${objectName}`, { params: withUserScope() });
+export const deleteObject = (objectName) => apiClient.delete(`/objects/${objectName}`, {
+  params: withUserScope(),
+  headers: getAuthHeaders(),
+});
 
 export const uploadObject = (objectName, fileOrBuffer, onUploadProgress) => {
   const config = {
     headers: {
+      ...getAuthHeaders(),
       'Content-Type': fileOrBuffer.type || 'application/octet-stream',
     },
     onUploadProgress,

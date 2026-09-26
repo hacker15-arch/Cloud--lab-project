@@ -1,37 +1,7 @@
 import React, { createContext, useContext, useState } from 'react';
+import apiClient from '../api/client';
 
 const AuthContext = createContext(null);
-const USERS_KEY = 'vault_users';
-
-function readUsers() {
-  try {
-    const saved = localStorage.getItem(USERS_KEY);
-    return saved ? JSON.parse(saved) : [];
-  } catch (e) {
-    return [];
-  }
-}
-
-function createUserRecord(name, email, role) {
-  const cleanEmail = (email || '').trim().toLowerCase();
-  const existing = readUsers().find((entry) => entry.email === cleanEmail);
-  if (existing) {
-    return existing;
-  }
-
-  const userObj = {
-    id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    name: name || 'Valued User',
-    email: cleanEmail,
-    role,
-    token: `jwt_mock_token_${Date.now()}`,
-  };
-
-  const users = readUsers();
-  users.push(userObj);
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-  return userObj;
-}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
@@ -42,29 +12,44 @@ export function AuthProvider({ children }) {
     return null;
   });
 
-  const login = (email, password) => {
+  const login = async (email, password) => {
     const cleanEmail = (email || '').trim().toLowerCase();
+    const response = await apiClient.post('/auth/login', {
+      email: cleanEmail,
+      password,
+    });
 
-    let role = 'user';
-    let name = cleanEmail.split('@')[0];
-    name = name.charAt(0).toUpperCase() + name.slice(1);
+    const userObj = {
+      id: response.user_id,
+      name: response.name,
+      email: response.email,
+      role: response.role,
+      token: response.token,
+      created_at: response.created_at,
+    };
 
-    if (cleanEmail === 'admin@vault.io' && (password === 'admin' || password === 'admin123')) {
-      role = 'admin';
-      name = 'Cluster Administrator';
-    } else if (cleanEmail === 'admin@vault.io') {
-      throw new Error('Invalid admin password. Default admin password is: admin');
-    }
-
-    const userObj = createUserRecord(name, cleanEmail, role);
     setUser(userObj);
     localStorage.setItem('vault_user', JSON.stringify(userObj));
     return userObj;
   };
 
-  const register = (name, email, password) => {
+  const register = async (name, email, password) => {
     const cleanEmail = (email || '').trim().toLowerCase();
-    const userObj = createUserRecord(name, cleanEmail, 'user');
+    const response = await apiClient.post('/auth/register', {
+      name,
+      email: cleanEmail,
+      password,
+    });
+
+    const userObj = {
+      id: response.user_id,
+      name: response.name,
+      email: response.email,
+      role: response.role,
+      token: response.token,
+      created_at: response.created_at,
+    };
+
     setUser(userObj);
     localStorage.setItem('vault_user', JSON.stringify(userObj));
     return userObj;

@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 
+from app.api.auth import get_authenticated_user_id
 from app.config import settings
 from app.core.consistency import QuorumNotSatisfiedError, consistency_manager
 from app.core.integrity import integrity_manager
@@ -52,9 +53,12 @@ def _display_object_name(object_name: str, user_id: Optional[str]) -> str:
 
 
 @router.get("/objects", response_model=ObjectListResponse)
-async def list_objects(user_id: Optional[str] = Query(None, alias="user_id")):
+async def list_objects(
+    request: Request,
+    user_id: Optional[str] = Query(None, alias="user_id"),
+):
     """List objects for the authenticated user only."""
-    normalized_user_id = _normalize_user_id(user_id)
+    normalized_user_id = _normalize_user_id(get_authenticated_user_id(user_id, request.headers.get("authorization")))
     if not normalized_user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -88,10 +92,11 @@ async def validate_quorum_config(
 @router.get("/objects/{object_name:path}/versions", response_model=ObjectHistoryResponse)
 async def get_object_versions(
     object_name: str,
+    request: Request,
     user_id: Optional[str] = Query(None, alias="user_id"),
 ):
     """Retrieve full version history for a specific object under the current user namespace."""
-    normalized_user_id = _normalize_user_id(user_id)
+    normalized_user_id = _normalize_user_id(get_authenticated_user_id(user_id, request.headers.get("authorization")))
     if not normalized_user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -112,10 +117,11 @@ async def get_object_versions(
 @router.get("/objects/{object_name:path}/metadata", response_model=ObjectMetadata)
 async def get_object_metadata(
     object_name: str,
+    request: Request,
     user_id: Optional[str] = Query(None, alias="user_id"),
 ):
     """Retrieve metadata, version, checksum, and replica locations for an object."""
-    normalized_user_id = _normalize_user_id(user_id)
+    normalized_user_id = _normalize_user_id(get_authenticated_user_id(user_id, request.headers.get("authorization")))
     if not normalized_user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -140,11 +146,12 @@ async def get_object_metadata(
 @router.get("/objects/{object_name:path}/verify", response_model=ObjectIntegrityReport)
 async def verify_object_integrity(
     object_name: str,
+    request: Request,
     version: Optional[int] = Query(None, ge=1),
     user_id: Optional[str] = Query(None, alias="user_id"),
 ):
     """Perform on-demand SHA-256 integrity verification across all replicas of an object."""
-    normalized_user_id = _normalize_user_id(user_id)
+    normalized_user_id = _normalize_user_id(get_authenticated_user_id(user_id, request.headers.get("authorization")))
     if not normalized_user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -165,10 +172,11 @@ async def verify_object_integrity(
 @router.head("/objects/{object_name:path}")
 async def head_object(
     object_name: str,
+    request: Request,
     user_id: Optional[str] = Query(None, alias="user_id"),
 ):
     """Fast check for object existence, size, version, and checksum headers."""
-    normalized_user_id = _normalize_user_id(user_id)
+    normalized_user_id = _normalize_user_id(get_authenticated_user_id(user_id, request.headers.get("authorization")))
     if not normalized_user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -210,7 +218,7 @@ async def download_object(
     user_id: Optional[str] = Query(None, alias="user_id"),
 ):
     """Download an object's contents (latest or specific version) via streaming response enforcing read quorum."""
-    normalized_user_id = _normalize_user_id(user_id)
+    normalized_user_id = _normalize_user_id(get_authenticated_user_id(user_id, request.headers.get("authorization")))
     if not normalized_user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -273,7 +281,7 @@ async def upload_object(
     user_id: Optional[str] = Query(None, alias="user_id"),
 ):
     """Upload an object, create a new version, compute SHA-256, and replicate to nodes with write quorum."""
-    normalized_user_id = _normalize_user_id(user_id)
+    normalized_user_id = _normalize_user_id(get_authenticated_user_id(user_id, request.headers.get("authorization")))
     if not normalized_user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -351,9 +359,13 @@ async def upload_object(
 
 
 @router.delete("/objects/{object_name:path}", response_model=ObjectDeleteResponse)
-async def delete_object(object_name: str, user_id: Optional[str] = Query(None, alias="user_id")):
+async def delete_object(
+    object_name: str,
+    request: Request,
+    user_id: Optional[str] = Query(None, alias="user_id"),
+):
     """Delete an object, its versions, and metadata across the cluster."""
-    normalized_user_id = _normalize_user_id(user_id)
+    normalized_user_id = _normalize_user_id(get_authenticated_user_id(user_id, request.headers.get("authorization")))
     if not normalized_user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
